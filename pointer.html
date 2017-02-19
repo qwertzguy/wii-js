@@ -1,0 +1,151 @@
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+#sphere {
+	position: absolute;
+	z-index: 5;
+	width: 50px;
+	height: 50px;
+	border-radius: 50px;
+	-webkit-radius: 50px;
+	background-color: blue;
+}
+#target {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  background-color: red;
+}
+#help {
+  margin-top: 50px;
+  width: 300px;
+}
+#connect-div {
+  font-size: 30px;
+}
+#connect-id {
+  line-height: 30px;
+}
+#connect-btn {
+  height: 30px;
+}
+#scored {
+  background-color: lightgreen;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -5;
+}
+</style>
+<script src="http://cdn.peerjs.com/0.3/peer.min.js"></script>
+<script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+<script src="https://code.jquery.com/color/jquery.color-2.1.2.min.js"></script>
+<script>
+window.onload = function() {
+  var ranid = Math.floor((Math.random() * 9999) + 1).toString();
+  var peer = new Peer(ranid, {key: 'x7fwx2kavpy6tj4i', debug:3});
+  var status = 0;
+  var minx = 0;
+  var maxx = 0;
+  var miny = 0;
+  var maxy = 0;
+  peer.on('open', function(id) {
+    $('#status').text('Your ID: ' + id);
+  });
+  peer.on('error', function(err) {
+    console.log(err);
+  });
+  $('#connect-btn').click(function() {
+    var conn = peer.connect($('#connect-id').val());
+    conn.on('open', function() {
+      $('#status').text('Connected as pointer to: ' + $('#connect-id').val());
+      var x;
+      var y;
+      window.ondeviceorientation = function(e) {
+        x = e.alpha;
+        y = e.beta;
+        if (status == 2) {
+          var xp = (x - minx) / (maxx - minx);
+          var yp = (y - miny) / (maxy - miny);
+          conn.send({tap: false, start: false, xp: xp, yp: yp});
+        }
+      }
+      $('#connect-div').hide();
+      $('#help').hide();
+      $('#calibrate').show();
+      document.body.addEventListener("touchstart", function (e) {
+        if (status == 0) {
+          minx = x;
+          miny = y;
+          status = 1;
+          $('#calibrate').text('Tap to set Lower-Right corner');
+        } else if (status == 1) {
+          maxx = x;
+          maxy = y;
+          status = 2;
+          $('#calibrate').hide();
+          conn.send({start: true});
+          document.body.addEventListener("touchstart", function (e) {
+            conn.send({tap: true});
+          });
+        }
+      });
+    });
+    conn.on('error', function(err) {
+      console.log(err);
+    });
+  });
+  peer.on('connection', function(conn) {
+    $('#status').text('Pointer connected: ' + conn.peer);
+    $('#connect-div').hide();
+    $('#help').hide();
+    var sphere = $('#sphere').get(0);
+    var target = $('#target').get(0);
+    var sx;
+    var sy;
+    var tx;
+    var ty;
+    var score = 0;
+    conn.on('data', function(data) {
+      if (data.tap) {
+        if (sx + 50 > tx && sx < tx + 100
+            && sy + 50 > ty && sy < ty + 100) {
+          score++;
+          $('#status').text('Score: ' + score);
+          $(document.body).stop(true).css('background-color', 'lightgreen').animate({'background-color': 'white'}, 1000);
+          moveTarget();
+        }
+      } else if (data.start) {
+        $(sphere).show();
+        $(target).show();
+        moveTarget();
+      } else {
+        sx = sphere.style.left = window.innerWidth * data.xp;
+        sy = sphere.style.top = window.innerHeight * data.yp;
+      }
+    });
+    function moveTarget() {
+      tx = target.style.left = (window.innerWidth - 200) * Math.random() + 100;
+      ty = target.style.top = (window.innerHeight - 200) * Math.random() + 100;
+      var time = 5000 - score * 100;
+      if (time < 500) { time = 500; }
+      $(target).stop(true).css('background-color', 'red').animate({'background-color': 'white'}, time, function() {
+        moveTarget();
+      });
+    }
+  });
+}
+</script>
+</head>
+<body>
+<div id='status' style='font-size: 40px'>Loading...</div>
+<div id='connect-div'>Connect to whiteboard: <br> <input id='connect-id' type='number' placeholder='ID' /><input id='connect-btn' type='button' value='Connect' /></div>
+<div id='calibrate' style='display:none'>Tap to set Upper-Left corner</div>
+<div id='help'>How it works: Open this page on your Android phone with Chrome. On your phone, enter the ID shown on your computer, and tap Connect. Point your phone, like you would point a TV remote, to the top-left corner of your computer screen and tap the screen, then point at the lower-right corner of your computer screen and tap the screen. Aim at the red square by moving your phone and tap the screen to shoot. Turning on rotation lock on your phone might help.</div>
+<div id='sphere' style='display:none'></div>
+<div id='target' style='display:none'></div>
+</body>
+</html>
